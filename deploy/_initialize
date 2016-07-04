@@ -1,0 +1,94 @@
+#!/bin/bash
+set -e
+source ./deploy.conf
+
+sudo su -p <<HERE
+set -e
+
+# Set locale to C
+echo 'LC_ALL=C' >> /etc/sysconfig/i18n
+export LC_ALL=C
+
+# yum packages
+yum -y update
+yum -y install $YUM_PACKAGES
+
+# pyenv
+git clone git://github.com/yyuu/pyenv.git $PYENV_ROOT
+HERE
+
+# Set pyenv PATH
+echo 'export PYENV_ROOT="'$PYENV_ROOT'"' | sudo tee -a /root/.bashrc
+echo 'if [ -d "$PYENV_ROOT" ]; then' | sudo tee -a /root/.bashrc
+echo '    export PATH="$PYENV_ROOT/bin:$PATH"' | sudo tee -a /root/.bashrc
+echo '    eval "$(pyenv init -)"' | sudo tee -a /root/.bashrc
+echo 'fi' | sudo tee -a /root/.bashrc
+
+sudo su -p <<HERE
+set -e
+source ~/.bash_profile
+
+# Install python
+export LC_ALL=C
+pyenv install $PYTHON_VERSION
+pyenv global $PYTHON_VERSION
+
+# user www-data
+mkdir -p $PROJECT_DIR
+mkdir $UWSGI_LOG_DIR
+useradd www-data
+usermod -a -G www-data ec2-user
+
+# Extract project
+tar -xzf /home/ec2-user/$PROJECT_NAME.tar.gz -C $PROJECT_DIR
+echo "ENV = 'prod'" >> $PROJECT_DIR/config/env.py
+
+# Copy nginx.conf
+cp $PROJECT_DIR/deploy/nginx.conf /etc/nginx
+
+# Copy uwsgi
+mkdir /etc/uwsgi
+cp $PROJECT_DIR/deploy/uwsgi.ini /etc/uwsgi
+cp $PROJECT_DIR/deploy/uwsgi /etc/init.d
+chmod 755 /etc/init.d/uwsgi
+chown root:root /etc/init.d/uwsgi
+
+# permissions
+chown -R www-data:www-data $WEB_ROOT
+chmod 2775 $WEB_ROOT
+find $WEB_ROOT -type d -exec sudo chmod 2775 {} +
+find $WEB_ROOT -type f -exec sudo chmod 0664 {} +
+chown -R www-data:www-data $UWSGI_LOG_DIR
+chmod 2775 $UWSGI_LOG_DIR
+
+# uwsgi log rotation
+echo '/var/log/uwsgi/*log {' >> /etc/logrotate.d/uwsgi
+echo '    create 0644 www-data www-data' >> /etc/logrotate.d/uwsgi
+echo '    daily' >> /etc/logrotate.d/uwsgi
+echo '    rotate 10' >> /etc/logrotate.d/uwsgi
+echo '    missingok' >> /etc/logrotate.d/uwsgi
+echo '    notifempty' >> /etc/logrotate.d/uwsgi
+echo '    compress' >> /etc/logrotate.d/uwsgi
+echo '    sharedscripts' >> /etc/logrotate.d/uwsgi
+echo '}' >> /etc/logrotate.d/uwsgi
+
+# pip
+pip install --upgrade pip
+pip install -r $PROJECT_DIR/requirements.txt
+
+# migrations
+cd $PROJECT_DIR
+python manage.py makemigrations --settings=$SETTINGS_NAMESPACE
+python manage.py migrate --settings=$SETTINGS_NAMESPACE
+python manage.py collectstatic --noinput --settings=$SETTINGS_NAMESPACE
+chown www-data:www-data db.sqlite3
+chmod 664 db.sqlite3
+
+# chkconfig
+chkconfig nginx on
+chkconfig uwsgi on
+
+# service start
+service nginx start
+service uwsgi start
+HERE

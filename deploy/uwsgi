@@ -1,0 +1,57 @@
+#!/bin/sh
+# chkconfig: 2345 80 20
+
+. /etc/rc.d/init.d/functions
+
+PROCESS='/opt/pyenv/shims/uwsgi'
+OPTION='--ini /etc/uwsgi/uwsgi.ini'
+
+[ -f $PROCESS ] || exit 1
+
+RETVAL=0
+
+start() {
+  echo -n 'Starting uwsgi: '
+  daemon "$PROCESS $OPTION &> /dev/null &"
+  RETVAL=$?
+  echo
+  return $RETVAL
+}
+
+stop() {
+  echo -n 'Stopping uwsgi: '
+  killproc $PROCESS
+  RETVAL=$?
+  echo
+  return $RETVAL
+}
+
+status() {
+  PGREP="$(ps aux | grep uwsgi | grep www-data | awk '{print $2}' | sed -n 1p)"
+  if [ -z $PGREP ]; then
+    echo 'uwsgi is stopped...';
+  else
+    echo "uwsgi is running... (pid: $PGREP)";
+  fi
+}
+
+case "$1" in
+  start)
+    start
+    ;;
+
+  stop)
+    stop
+    ;;
+
+  status)
+    status
+    ;;
+
+  restart)
+    stop
+    start
+    ;;
+esac
+
+exit $REVAL

@@ -1,0 +1,40 @@
+#!bin/bash
+set -e
+
+source deploy/deploy.conf
+
+tar --exclude='db.sqlite3' --exclude='.git' --exclude='.packages' \
+  --exclude='__pycache__' --exclude='config/env.py' \
+  -czf ~/$PROJECT_NAME.tar.gz .
+
+scp ~/$PROJECT_NAME.tar.gz $SSH_HOST:/home/ec2-user
+rm ~/$PROJECT_NAME.tar.gz
+scp deploy/deploy.conf $SSH_HOST:/home/ec2-user
+
+initialize() {
+  scp deploy/_initialize $SSH_HOST:/home/ec2-user
+  ssh -C $SSH_HOST 'sh /home/ec2-user/_initialize'
+  echo '=============SETUP COMPLETED=============='
+  ssh -C $SSH_HOST 'rm /home/ec2-user/_initialize'
+  ssh -C $SSH_HOST 'rm /home/ec2-user/deploy.conf'
+  ssh -C $SSH_HOST 'rm /home/ec2-user/'$PROJECT_NAME'.tar.gz'
+}
+
+release() {
+  scp deploy/_release $SSH_HOST:/home/ec2-user
+  ssh -C $SSH_HOST 'sh /home/ec2-user/_release'
+  echo '============RELEASE COMPLETED============='
+  ssh -C $SSH_HOST 'rm /home/ec2-user/_release'
+  ssh -C $SSH_HOST 'rm /home/ec2-user/deploy.conf'
+  ssh -C $SSH_HOST 'rm /home/ec2-user/'$PROJECT_NAME'.tar.gz'
+}
+
+case "$1" in
+  initialize)
+    initialize
+    ;;
+
+  release)
+    release
+    ;;
+esac

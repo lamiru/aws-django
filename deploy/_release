@@ -1,0 +1,41 @@
+#!/bin/bash
+set -e
+source ./deploy.conf
+
+sudo su -p <<HERE
+set -e
+source ~/.bash_profile
+
+# Extract project
+yes | cp -rf $PROJECT_DIR/db.sqlite3 /home/ec2-user
+rm -rf $PROJECT_DIR
+mkdir $PROJECT_DIR
+tar -xzf /home/ec2-user/$PROJECT_NAME.tar.gz -C $PROJECT_DIR
+echo "ENV = 'prod'" >> $PROJECT_DIR/config/env.py
+yes | mv -f /home/ec2-user/db.sqlite3 $PROJECT_DIR
+
+# Copy files
+yes | cp -rf $PROJECT_DIR/deploy/nginx.conf /etc/nginx
+yes | cp -rf $PROJECT_DIR/deploy/uwsgi.ini /etc/uwsgi
+yes | cp -rf $PROJECT_DIR/deploy/uwsgi /etc/init.d
+
+# pip
+pip install --upgrade pip
+pip install -r $PROJECT_DIR/requirements.txt
+
+# migrations
+cd $PROJECT_DIR
+python manage.py makemigrations --settings=$SETTINGS_NAMESPACE
+python manage.py migrate --settings=$SETTINGS_NAMESPACE
+python manage.py collectstatic --noinput --settings=$SETTINGS_NAMESPACE
+
+# permissions
+find $WEB_ROOT -type d -exec sudo chmod 2775 {} +
+find $WEB_ROOT -type f -exec sudo chmod 0664 {} +
+find $WEB_ROOT -type d -exec sudo chown www-data:www-data {} +
+find $WEB_ROOT -type f -exec sudo chown www-data:www-data {} +
+
+# service
+service nginx restart
+service uwsgi restart
+HERE
