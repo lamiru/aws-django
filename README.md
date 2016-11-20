@@ -1,13 +1,19 @@
 AWS Django
 ===
 
-Auto deploy project for Django using pyenv, uwsgi, nginx on AWS Amazon Linux.
+Auto deployment project for Django using pyenv, uwsgi, nginx on AWS Amazon Linux.
 
 ## How to use
 
-- Setup your ssh configuration.
-- Edit `PROJECT_NAME` and `SSH_HOST` in `/deploy/deploy.conf` if you need.
-- Run `prod` commands.
+### Setup ssh configuration
+
+```
+Host project-prod-web
+  Hostname XX.XXX.XXX.XXX
+  User ec2-user
+  IdentityFile ~/.ssh/XXXXXXXXXXX.pem
+```
+- Edit `SSH_HOST` in `/prod` if you need.
 
 ### Initialize
 
@@ -20,6 +26,11 @@ $ sh prod initialize
 ```
 $ sh prod release
 ```
+
+## How to access to public website
+
+- Access to `http://[your domain]/robots.txt` to confirm nginx is running.
+- Access to `http://[your domain]/admin` to confirm uwsgi is running.
 
 ## License
 

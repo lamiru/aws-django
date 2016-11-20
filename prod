@@ -1,23 +1,22 @@
 #!bin/bash
 set -e
 
-source deploy/deploy.conf
+ENV='prod'
+source deploy/.common
+SSH_HOST=$PROJECT_NAME'-'$ENV'-web'
 
-tar --exclude='db.sqlite3' --exclude='.git' --exclude='.packages' \
-  --exclude='__pycache__' --exclude='config/env.py' \
+tar --exclude='db.sqlite3' --exclude='.git' --exclude='.packages' --exclude='__pycache__' \
   -czf ~/$PROJECT_NAME.tar.gz .
 
 scp ~/$PROJECT_NAME.tar.gz $SSH_HOST:/home/ec2-user
 rm ~/$PROJECT_NAME.tar.gz
-scp deploy/deploy.conf $SSH_HOST:/home/ec2-user
+scp deploy/.common $SSH_HOST:/home/ec2-user
 
 initialize() {
   scp deploy/_initialize $SSH_HOST:/home/ec2-user
   ssh -C $SSH_HOST 'sh /home/ec2-user/_initialize'
   echo '=============SETUP COMPLETED=============='
   ssh -C $SSH_HOST 'rm /home/ec2-user/_initialize'
-  ssh -C $SSH_HOST 'rm /home/ec2-user/deploy.conf'
-  ssh -C $SSH_HOST 'rm /home/ec2-user/'$PROJECT_NAME'.tar.gz'
 }
 
 release() {
@@ -25,16 +24,39 @@ release() {
   ssh -C $SSH_HOST 'sh /home/ec2-user/_release'
   echo '============RELEASE COMPLETED============='
   ssh -C $SSH_HOST 'rm /home/ec2-user/_release'
-  ssh -C $SSH_HOST 'rm /home/ec2-user/deploy.conf'
+}
+
+permission() {
+  scp deploy/_permission $SSH_HOST:/home/ec2-user
+  ssh -C $SSH_HOST 'sh /home/ec2-user/_permission'
+  echo '===========PERMISSION COMPLETED==========='
+  ssh -C $SSH_HOST 'rm /home/ec2-user/_permission'
+}
+
+start() {
+  scp config/env_$ENV.py $SSH_HOST:$PROJECT_DIR/config/env.py
+  scp deploy/_start $SSH_HOST:/home/ec2-user
+  ssh -C $SSH_HOST 'sh /home/ec2-user/_start'
+  echo '=============SERVICE STARTED=============='
+  ssh -C $SSH_HOST 'rm /home/ec2-user/_start'
+  ssh -C $SSH_HOST 'rm /home/ec2-user/.common'
   ssh -C $SSH_HOST 'rm /home/ec2-user/'$PROJECT_NAME'.tar.gz'
 }
 
 case "$1" in
   initialize)
     initialize
+    permission
+    start
     ;;
 
   release)
     release
+    permission
+    start
+    ;;
+
+  start)
+    start
     ;;
 esac

@@ -1,0 +1,15 @@
+#!/bin/bash
+set -e
+source ./.common
+
+sudo su -p <<HERE
+set -e
+source ~/.bash_profile
+
+# permissions
+find $WEB_ROOT -type d -exec sudo chmod 2775 {} +
+find $WEB_ROOT -type f -exec sudo chmod 0664 {} +
+find $WEB_ROOT -type d -exec sudo chown www-data:www-data {} +
+find $WEB_ROOT -type f -exec sudo chown www-data:www-data {} +
+find /var/lib/nginx -type d -exec sudo chown www-data:www-data {} +
+HERE
